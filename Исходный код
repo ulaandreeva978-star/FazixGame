@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>📚 Читалка с ИИ</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    min-height: 100vh;
+    color: #fff;
+    padding: 20px;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { text-align: center; margin-bottom: 20px; font-size: 2em; }
+  .panel {
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  textarea {
+    width: 100%;
+    min-height: 150px;
+    padding: 15px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255,255,255,0.95);
+    color: #222;
+    font-size: 16px;
+    resize: vertical;
+    font-family: inherit;
+  }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; align-items: center; }
+  button, select, input[type="range"] {
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  button {
+    background: #ff6b6b;
+    color: #fff;
+    font-weight: 600;
+  }
+  button:hover { background: #ee5a5a; transform: translateY(-2px); }
+  button.active { background: #4ecdc4; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  select, input[type="range"] {
+    background: rgba(255,255,255,0.9);
+    color: #222;
+  }
+  .voice-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px; }
+  .voice-controls label { display: flex; flex-direction: column; font-size: 14px; gap: 5px; }
+  .status {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.3);
+    font-size: 14px;
+    min-height: 20px;
+  }
+  .status.listening { background: #e74c3c; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.7; } }
+  .library { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
+  .book {
+    background: rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .book:hover { background: rgba(255,255,255,0.2); transform: translateY(-3px); }
+  .book h3 { font-size: 16px; margin-bottom: 5px; color: #ffd93d; }
+  .book .author { font-size: 13px; opacity: 0.8; margin-bottom: 8px; }
+  .book .preview { font-size: 13px; opacity: 0.9; line-height: 1.4; }
+  .book .grade { display: inline-block; background: #4ecdc4; color: #000; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-bottom: 8px; }
+  .search {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255,255,255,0.9);
+    color: #222;
+    font-size: 15px;
+    margin-bottom: 15px;
+  }
+  .tabs { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+  .tab {
+    padding: 8px 16px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .tab.active { background: #ffd93d; color: #000; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📚 Читалка с ИИ</h1>
+
+  <!-- Панель ввода -->
+  <div class="panel">
+    <h2 style="margin-bottom:10px;">📝 Текст для работы</h2>
+    <textarea id="textInput" placeholder="Введите текст, выберите из библиотеки или надиктуйте голосом..."></textarea>
+    
+    <div class="controls">
+      <button id="btnListen">🎤 Распознать речь</button>
+      <button id="btnSpeak">🔊 Озвучить текст</button>
+      <button id="btnStop">⏹ Стоп</button>
+      <button id="btnClear">🗑 Очистить</button>
+    </div>
+    
+    <div class="voice-controls">
+      <label>
+        🎙 Голос:
+        <select id="voiceSelect"></select>
+      </label>
+      <label>
+        ⚡ Скорость: <span id="rateVal">1.0</span>
+        <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+      </label>
+      <label>
+        🎵 Высота: <span id="pitchVal">1.0</span>
+        <input type="range" id="pitch" min="0" max="2" step="0.1" value="1">
+      </label>
+    </div>
+    
+    <div class="status" id="status">Готово к работе</div>
+  </div>
+
+  <!-- Библиотека -->
+  <div class="panel">
+    <h2 style="margin-bottom:10px;">📖 Библиотека школьной программы</h2>
+    <input type="text" class="search" id="search" placeholder="🔍 Поиск по названию или автору...">
+    <div class="tabs" id="tabs"></div>
+    <div class="library" id="library"></div>
+  </div>
+</div>
+
+<script>
+// ====== БИБЛИОТЕКА КНИГ ИЗ ШКОЛЬНОЙ ПРОГРАММЫ ======
+const books = [
+  // 5-6 класс
+  { title: "Сказка о мёртвой царевне", author: "А.С. Пушкин", grade: "5 класс", text: "В светлице своей сидит, тихо лебедушкой плывёт, и, бывало, песню поёт. Царевна в тереме сидит, тихо-молча, словно спит; и, бывало, песню поёт..." },
+  { title: "Капитанская дочка", author: "А.С. Пушкин", grade: "7 класс", text: "Береги честь смолоду. Отец мой, Андрей Петрович Гринёв, в молодости своей служил при графе Минихе и был выпущен в отставку премьер-майором..." },
+  { title: "Мцыри", author: "М.Ю. Лермонтов", grade: "6 класс", text: "Ты помнишь, девочка, как я в тот день, когда, прижавшись к изголовью, ты ждала сладостной любви, — как я, бледна, уныла, стояла у окна..." },
+  { title: "Тарас Бульба", author: "Н.В. Гоголь", grade: "7 класс", text: "О, дайте мне коней, вы все степные просторы! Дайте мне взглянуть на вас, пока я не умер. А вы, степи, что вы? Зачем вы лежите так широко?.." },
+  { title: "Ася", author: "И.С. Тургенев", grade: "7 класс", text: "В один прекрасный вечер я сидел у открытого окна и смотрел на улицу, которое уже начало темнеть. Вдруг я увидел в окне напротив молодую девушку..." },
+  { title: "Старуха Изергиль", author: "М. Горький", grade: "7 класс", text: "Море стлалось кругом, вздыхая и накатываясь на берег... И старуха Изергиль рассказывала о Данко, о том, как он вырвал своё сердце и осветил им путь людям." },
+  { title: "Гранатовый браслет", author: "А.И. Куприн", grade: "5 класс", text: "Жили-были три девочки: Женя, Соня и Лёля. И был у них друг — мальчик Алёша. И был у них друг — мальчик Алёша..." },
+  
+  // 8-9 класс
+  { title: "Евгений Онегин", author: "А.С. Пушкин", grade: "8 класс", text: "Мой дядя самых честных правил, когда не в шутку занемог, он уважать себя заставил и лучше выдумать не мог. Его пример другим наука..." },
+  { title: "Герой нашего времени", author: "М.Ю. Лермонтов", grade: "9 класс", text: "Я часто замечал, что те из людей, которые любят много рассказывать, почти всегда молчаливы. Печорин был из таких..." },
+  { title: "Горе от ума", author: "А.С. Грибоедов", grade: "9 класс", text: "А.Ч. Чацкий: «Ах, Софья Павловна! Как не рад видеть вас! Вы выросли, похорошели...» — «Скажите, что вам вздумалось приехать!»" },
+  { title: "Ревизор", author: "Н.В. Гоголь", grade: "9 класс", text: "Я пригласил вас, господа, чтобы сообщить вам пренеприятное известие: к нам едет ревизор. — Как ревизор? — Ревизор из Петербурга, инкогнито." },
+  { title: "Мёртвые души", author: "Н.В. Гоголь", grade: "9 класс", text: "В ворота гостиницы губернского города NN въехала довольно красивая рессорная небольшая бричка, в какой ездят холостяки: отставные подполковники, штабс-капитаны..." },
+  { title: "Гроза", author: "А.Н. Островский", grade: "9 класс", text: "Жестокие нравы, сударь, в нашем городе, жестокие! Жестокость — не порок. А вот дикость — это другое дело. Дикость — вот что страшно." },
+  { title: "Преступление и наказание", author: "Ф.М. Достоевский", grade: "10 класс", text: "В начале июля, в чрезвычайно жаркое время, под вечер, один молодой человек вышел из своей каморки, которую нанимал от жильцов в С-м переулке..." },
+  { title: "Война и мир", author: "Л.Н. Толстой", grade: "10 класс", text: "— Eh bien, mon prince. Gênes et Lucques ne sont plus que des apanages, des domaines de la famille Buonaparte... — Ну, князь, Генуя и Лукка стали не более как поместьями семьи Бонапарте." },
+  { title: "Анна Каренина", author: "Л.Н. Толстой", grade: "11 класс", text: "Все счастливые семьи похожи друг на друга, каждая несчастливая семья несчастлива по-своему. Всё смешалось в доме Облонских." },
+  { title: "Отцы и дети", author: "И.С. Тургенев", grade: "10 класс", text: "— Что, Евгений, неужели не узнаёшь? — Базаров! — с неожиданной бодростью произнёс Аркадий, оборачиваясь к своему спутнику..." },
+  { title: "Мастер и Маргарита", author: "М.А. Булгаков", grade: "11 класс", text: "Никогда и ничего не просите! Никогда и ничего, и в особенности у тех, кто сильнее вас. Сами предложат и сами всё дадут." },
+  { title: "Собачье сердце", author: "М.А. Булгаков", grade: "11 класс", text: "Угу-гу-гу-гугу! Кто это? Я? Да я... Шарик. Умираю. Ранен в живот, под трамвай попал. Ага, это вы, доктор Филипп Филиппович?" },
+  { title: "Тихий Дон", author: "М.А. Шолохов", grade: "11 класс", text: "С холма, покрытого прошлогодней жёлклой травою, открывался вид на хутор. Внизу, у берегов быстро бегущего Донца, стоял хутор..." },
+  { title: "Судьба человека", author: "М.А. Шолохов", grade: "9 класс", text: "В одну из первых послевоенных весен, в апреле сорок шестого года, я возвращался с Урала на родину. Ехал я попутными машинами..." },
+  
+  // Поэзия
+  { title: "Бородино", author: "М.Ю. Лермонтов", grade: "6 класс", text: "Скажи-ка, дядя, ведь не даром Москва, спалённая пожаром, французам не отдана? Ведь были ж схватки боевые, да, говорят, ещё какие!" },
+  { title: "Зимнее утро", author: "А.С. Пушкин", grade: "5 класс", text: "Мороз и солнце; день чудесный! Ещё ты дремлешь, друг прелестный — Пора, красавица, проснись: Открой сомкнуты негой взоры..." },
+  { title: "Зимний вечер", author: "А.С. Пушкин", grade: "6 класс", text: "Буря мглою небо кроет, вихри снежные крутя; то, как зверь, она завоет, то заплачет, как дитя..." },
+  { title: "Парус", author: "М.Ю. Лермонтов", grade: "5 класс", text: "Белеет парус одинокий в тумане моря голубом!.. Что ищет он в стране далёкой? Что кинул он в краю родном?.." },
+  { title: "Не жаль мне тех", author: "С.А. Есенин", grade: "9 класс", text: "Не жаль мне тех, кто уже не со мною, — я сочувствую всем, кто живёт. Вот поэтому, видно, душою покоя я не нахожу, а ищу..." },
+  { title: "Февраль. Достать чернил и плакать!", author: "Б.Л. Пастернак", grade: "10 класс", text: "Февраль. Достать чернил и плакать! Писать о феврале навзрыд, пока грохочущая слякоть весною жгучей не горит." },
+  { title: "Жди меня", author: "К.М. Симонов", grade: "7 класс", text: "Жди меня, и я вернусь. Только очень жди, жди, когда наводят грусть жёлтые дожди, когда снега метут, когда жаром зной..." },
+  { title: "Двенадцать", author: "А.А. Блок", grade: "11 класс", text: "Чёрный вечер. Белый снег. Ветер, ветер! На ногах не стоит человек. Ветер, ветер — на всём божьем свете!.." },
+  
+  // Проза XX века
+  { title: "Человек в футляре", author: "А.П. Чехов", grade: "10 класс", text: "— Как же-с. Так вот-с, жил-был на свете учитель греческого языка, мой товарищ, Беликов. Он умер недавно, около двух месяцев назад..." },
+  { title: "Судьба человека", author: "М.А. Шолохов", grade: "9 класс", text: "В одну из первых послевоенных весен, в апреле сорок шестого года, я возвращался с Урала на родину..." },
+  { title: "Недоросль", author: "Д.И. Фонвизин", grade: "8 класс", text: "Вот злонравия достойные плоды! Митрофанушка! Не хочу учиться, хочу жениться. Вот злонравия достойные плоды!" },
+  { title: "Дикий помещик", author: "М.Е. Салтыков-Щедрин", grade: "8 класс", text: "В отдалённейших странах, где-то почти на краю света, живёт-поживает дикий помещик. Это — самый последний, так сказать, аккорд, в котором отзывается..." },
+  { title: "Василий Тёркин", author: "А.Т. Твардовский", grade: "7 класс", text: "Переправа, переправа! Берег левый, берег правый, снег шершавый, кромка льда... Кому память, кому слава, кому тёмная вода — ни приметы, ни следа." },
+  { title: "Молодая гвардия", author: "А.А. Фадеев", grade: "9 класс", text: "Над городом Краснодоном, над степью, над Донцом стоял невиданный в истории войны бой. Гитлеровцы рвались к Кавказу..." },
+];
+
+// ====== ЭЛЕМЕНТЫ ======
+const textInput = document.getElementById('textInput');
+const btnListen = document.getElementById('btnListen');
+const btnSpeak = document.getElementById('btnSpeak');
+const btnStop = document.getElementById('btnStop');
+const btnClear = document.getElementById('btnClear');
+const voiceSelect = document.getElementById('voiceSelect');
+const rate = document.getElementById('rate');
+const pitch = document.getElementById('pitch');
+const rateVal = document.getElementById('rateVal');
+const pitchVal = document.getElementById('pitchVal');
+const status = document.getElementById('status');
+const library = document.getElementById('library');
+const search = document.getElementById('search');
+const tabs = document.getElementById('tabs');
+
+let recognition = null;
+let isListening = false;
+let voices = [];
+let currentFilter = 'Все';
+
+// ====== ГОЛОСА ======
+function loadVoices() {
+  voices = speechSynthesis.getVoices();
+  voiceSelect.innerHTML = '';
+  // Сначала русские, потом остальные
+  const sorted = [...voices].sort((a, b) => {
+    const ar = a.lang.startsWith('ru');
+    const br = b.lang.startsWith('ru');
+    if (ar && !br) return -1;
+    if (!ar && br) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  sorted.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = voices.indexOf(v);
+    opt.textContent = `${v.name} (${v.lang})${v.default ? ' ★' : ''}`;
+    voiceSelect.appendChild(opt);
+  });
+  if (voices.length === 0) {
+    voiceSelect.innerHTML = '<option>Голоса не найдены</option>';
+  }
+}
+speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+// ====== РАСПОЗНАВАНИЕ РЕЧИ ======
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ru-RU';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  
+  recognition.onresult = (e) => {
+    let final = '', interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    if (final) textInput.value += final;
+    status.textContent = '🎙 ' + (interim || 'Слушаю...');
+  };
+  recognition.onerror = (e) => {
+    status.textContent = '❌ Ошибка: ' + e.error;
+    stopListening();
+  };
+  recognition.onend = () => {
+    if (isListening) recognition.start(); // авто-перезапуск
+    else status.textContent = 'Готово к работе';
+  };
+} else {
+  btnListen.disabled = true;
+  btnListen.textContent = '🎤 Не поддерживается';
+}
+
+function startListening() {
+  if (!recognition) return;
+  isListening = true;
+  recognition.start();
+  btnListen.classList.add('active');
+  btnListen.textContent = '🔴 Идёт запись...';
+  status.textContent = '🎙 Говорите...';
+  status.classList.add('listening');
+}
+
+function stopListening() {
+  isListening = false;
+  if (recognition) recognition.stop();
+  btnListen.classList.remove('active');
+  btnListen.textContent = '🎤 Распознать речь';
+  status.classList.remove('listening');
+}
+
+btnListen.onclick = () => isListening ? stopListening() : startListening();
+
+// ====== ОЗВУЧКА ======
+btnSpeak.onclick = () => {
+  const text = textInput.value.trim();
+  if (!text) { status.textContent = '⚠ Введите текст для озвучки'; return; }
+  if (speechSynthesis.speaking) speechSynthesis.cancel();
+  
+  const utter = new SpeechSynthesisUtterance(text);
+  const selectedVoice = voices[voiceSelect.value];
+  if (selectedVoice) utter.voice = selectedVoice;
+  utter.rate = parseFloat(rate.value);
+  utter.pitch = parseFloat(pitch.value);
+  utter.lang = selectedVoice ? selectedVoice.lang : 'ru-RU';
+  
+  utter.onstart = () => status.textContent = '🔊 Читаю...';
+  utter.onend = () => status.textContent = '✅ Готово';
+  utter.onerror = (e) => status.textContent = '❌ Ошибка озвучки';
+  
+  speechSynthesis.speak(utter);
+};
+
+btnStop.onclick = () => {
+  speechSynthesis.cancel();
+  stopListening();
+  status.textContent = '⏹ Остановлено';
+};
+
+btnClear.onclick = () => {
+  textInput.value = '';
+  status.textContent = '🗑 Очищено';
+};
+
+// ====== СЛАЙДЕРЫ ======
+rate.oninput = () => rateVal.textContent = parseFloat(rate.value).toFixed(1);
+pitch.oninput = () => pitchVal.textContent = parseFloat(pitch.value).toFixed(1);
+
+// ====== БИБЛИОТЕКА ======
+const grades = ['Все', ...new Set(books.map(b => b.grade))];
+grades.forEach(g => {
+  const t = document.createElement('div');
+  t.className = 'tab' + (g === 'Все' ? ' active' : '');
+  t.textContent = g;
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    currentFilter = g;
+    renderBooks();
+  };
+  tabs.appendChild(t);
+});
+
+function renderBooks() {
+  const q = search.value.toLowerCase().trim();
+  library.innerHTML = '';
+  const filtered = books.filter(b => {
+    const matchFilter = currentFilter === 'Все' || b.grade === currentFilter;
+    const matchSearch = !q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q);
+    return matchFilter && matchSearch;
+  });
+  
+  if (filtered.length === 0) {
+    library.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;opacity:0.7;">📭 Ничего не найдено</div>';
+    return;
+  }
+  
+  filtered.forEach(b => {
+    const card = document.createElement('div');
+    card.className = 'book';
+    card.innerHTML = `
+      <span class="grade">${b.grade}</span>
+      <h3>${b.title}</h3>
+      <div class="author">✍ ${b.author}</div>
+      <div class="preview">${b.text.substring(0, 120)}...</div>
+    `;
+    card.onclick = () => {
+      textInput.value = b.text;
+      textInput.focus();
+      status.textContent = `✅ Вставлено: «${b.title}» (${b.author})`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    library.appendChild(card);
+  });
+}
+
+search.oninput = renderBooks;
+renderBooks();
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>📚 Читалка с ИИ</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    min-height: 100vh;
+    color: #fff;
+    padding: 20px;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { text-align: center; margin-bottom: 20px; font-size: 2em; }
+  .panel {
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  textarea {
+    width: 100%;
+    min-height: 150px;
+    padding: 15px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255,255,255,0.95);
+    color: #222;
+    font-size: 16px;
+    resize: vertical;
+    font-family: inherit;
+  }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; align-items: center; }
+  button, select, input[type="range"] {
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  button {
+    background: #ff6b6b;
+    color: #fff;
+    font-weight: 600;
+  }
+  button:hover { background: #ee5a5a; transform: translateY(-2px); }
+  button.active { background: #4ecdc4; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  select, input[type="range"] {
+    background: rgba(255,255,255,0.9);
+    color: #222;
+  }
+  .voice-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px; }
+  .voice-controls label { display: flex; flex-direction: column; font-size: 14px; gap: 5px; }
+  .status {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.3);
+    font-size: 14px;
+    min-height: 20px;
+  }
+  .status.listening { background: #e74c3c; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.7; } }
+  .library { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
+  .book {
+    background: rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .book:hover { background: rgba(255,255,255,0.2); transform: translateY(-3px); }
+  .book h3 { font-size: 16px; margin-bottom: 5px; color: #ffd93d; }
+  .book .author { font-size: 13px; opacity: 0.8; margin-bottom: 8px; }
+  .book .preview { font-size: 13px; opacity: 0.9; line-height: 1.4; }
+  .book .grade { display: inline-block; background: #4ecdc4; color: #000; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-bottom: 8px; }
+  .search {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255,255,255,0.9);
+    color: #222;
+    font-size: 15px;
+    margin-bottom: 15px;
+  }
+  .tabs { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+  .tab {
+    padding: 8px 16px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .tab.active { background: #ffd93d; color: #000; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📚 Читалка с ИИ</h1>
+
+  <!-- Панель ввода -->
+  <div class="panel">
+    <h2 style="margin-bottom:10px;">📝 Текст для работы</h2>
+    <textarea id="textInput" placeholder="Введите текст, выберите из библиотеки или надиктуйте голосом..."></textarea>
+    
+    <div class="controls">
+      <button id="btnListen">🎤 Распознать речь</button>
+      <button id="btnSpeak">🔊 Озвучить текст</button>
+      <button id="btnStop">⏹ Стоп</button>
+      <button id="btnClear">🗑 Очистить</button>
+    </div>
+    
+    <div class="voice-controls">
+      <label>
+        🎙 Голос:
+        <select id="voiceSelect"></select>
+      </label>
+      <label>
+        ⚡ Скорость: <span id="rateVal">1.0</span>
+        <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+      </label>
+      <label>
+        🎵 Высота: <span id="pitchVal">1.0</span>
+        <input type="range" id="pitch" min="0" max="2" step="0.1" value="1">
+      </label>
+    </div>
+    
+    <div class="status" id="status">Готово к работе</div>
+  </div>
+
+  <!-- Библиотека -->
+  <div class="panel">
+    <h2 style="margin-bottom:10px;">📖 Библиотека школьной программы</h2>
+    <input type="text" class="search" id="search" placeholder="🔍 Поиск по названию или автору...">
+    <div class="tabs" id="tabs"></div>
+    <div class="library" id="library"></div>
+  </div>
+</div>
+
+<script>
+// ====== БИБЛИОТЕКА КНИГ ИЗ ШКОЛЬНОЙ ПРОГРАММЫ ======
+const books = [
+  // 5-6 класс
+  { title: "Сказка о мёртвой царевне", author: "А.С. Пушкин", grade: "5 класс", text: "В светлице своей сидит, тихо лебедушкой плывёт, и, бывало, песню поёт. Царевна в тереме сидит, тихо-молча, словно спит; и, бывало, песню поёт..." },
+  { title: "Капитанская дочка", author: "А.С. Пушкин", grade: "7 класс", text: "Береги честь смолоду. Отец мой, Андрей Петрович Гринёв, в молодости своей служил при графе Минихе и был выпущен в отставку премьер-майором..." },
+  { title: "Мцыри", author: "М.Ю. Лермонтов", grade: "6 класс", text: "Ты помнишь, девочка, как я в тот день, когда, прижавшись к изголовью, ты ждала сладостной любви, — как я, бледна, уныла, стояла у окна..." },
+  { title: "Тарас Бульба", author: "Н.В. Гоголь", grade: "7 класс", text: "О, дайте мне коней, вы все степные просторы! Дайте мне взглянуть на вас, пока я не умер. А вы, степи, что вы? Зачем вы лежите так широко?.." },
+  { title: "Ася", author: "И.С. Тургенев", grade: "7 класс", text: "В один прекрасный вечер я сидел у открытого окна и смотрел на улицу, которое уже начало темнеть. Вдруг я увидел в окне напротив молодую девушку..." },
+  { title: "Старуха Изергиль", author: "М. Горький", grade: "7 класс", text: "Море стлалось кругом, вздыхая и накатываясь на берег... И старуха Изергиль рассказывала о Данко, о том, как он вырвал своё сердце и осветил им путь людям." },
+  { title: "Гранатовый браслет", author: "А.И. Куприн", grade: "5 класс", text: "Жили-были три девочки: Женя, Соня и Лёля. И был у них друг — мальчик Алёша. И был у них друг — мальчик Алёша..." },
+  
+  // 8-9 класс
+  { title: "Евгений Онегин", author: "А.С. Пушкин", grade: "8 класс", text: "Мой дядя самых честных правил, когда не в шутку занемог, он уважать себя заставил и лучше выдумать не мог. Его пример другим наука..." },
+  { title: "Герой нашего времени", author: "М.Ю. Лермонтов", grade: "9 класс", text: "Я часто замечал, что те из людей, которые любят много рассказывать, почти всегда молчаливы. Печорин был из таких..." },
+  { title: "Горе от ума", author: "А.С. Грибоедов", grade: "9 класс", text: "А.Ч. Чацкий: «Ах, Софья Павловна! Как не рад видеть вас! Вы выросли, похорошели...» — «Скажите, что вам вздумалось приехать!»" },
+  { title: "Ревизор", author: "Н.В. Гоголь", grade: "9 класс", text: "Я пригласил вас, господа, чтобы сообщить вам пренеприятное известие: к нам едет ревизор. — Как ревизор? — Ревизор из Петербурга, инкогнито." },
+  { title: "Мёртвые души", author: "Н.В. Гоголь", grade: "9 класс", text: "В ворота гостиницы губернского города NN въехала довольно красивая рессорная небольшая бричка, в какой ездят холостяки: отставные подполковники, штабс-капитаны..." },
+  { title: "Гроза", author: "А.Н. Островский", grade: "9 класс", text: "Жестокие нравы, сударь, в нашем городе, жестокие! Жестокость — не порок. А вот дикость — это другое дело. Дикость — вот что страшно." },
+  { title: "Преступление и наказание", author: "Ф.М. Достоевский", grade: "10 класс", text: "В начале июля, в чрезвычайно жаркое время, под вечер, один молодой человек вышел из своей каморки, которую нанимал от жильцов в С-м переулке..." },
+  { title: "Война и мир", author: "Л.Н. Толстой", grade: "10 класс", text: "— Eh bien, mon prince. Gênes et Lucques ne sont plus que des apanages, des domaines de la famille Buonaparte... — Ну, князь, Генуя и Лукка стали не более как поместьями семьи Бонапарте." },
+  { title: "Анна Каренина", author: "Л.Н. Толстой", grade: "11 класс", text: "Все счастливые семьи похожи друг на друга, каждая несчастливая семья несчастлива по-своему. Всё смешалось в доме Облонских." },
+  { title: "Отцы и дети", author: "И.С. Тургенев", grade: "10 класс", text: "— Что, Евгений, неужели не узнаёшь? — Базаров! — с неожиданной бодростью произнёс Аркадий, оборачиваясь к своему спутнику..." },
+  { title: "Мастер и Маргарита", author: "М.А. Булгаков", grade: "11 класс", text: "Никогда и ничего не просите! Никогда и ничего, и в особенности у тех, кто сильнее вас. Сами предложат и сами всё дадут." },
+  { title: "Собачье сердце", author: "М.А. Булгаков", grade: "11 класс", text: "Угу-гу-гу-гугу! Кто это? Я? Да я... Шарик. Умираю. Ранен в живот, под трамвай попал. Ага, это вы, доктор Филипп Филиппович?" },
+  { title: "Тихий Дон", author: "М.А. Шолохов", grade: "11 класс", text: "С холма, покрытого прошлогодней жёлклой травою, открывался вид на хутор. Внизу, у берегов быстро бегущего Донца, стоял хутор..." },
+  { title: "Судьба человека", author: "М.А. Шолохов", grade: "9 класс", text: "В одну из первых послевоенных весен, в апреле сорок шестого года, я возвращался с Урала на родину. Ехал я попутными машинами..." },
+  
+  // Поэзия
+  { title: "Бородино", author: "М.Ю. Лермонтов", grade: "6 класс", text: "Скажи-ка, дядя, ведь не даром Москва, спалённая пожаром, французам не отдана? Ведь были ж схватки боевые, да, говорят, ещё какие!" },
+  { title: "Зимнее утро", author: "А.С. Пушкин", grade: "5 класс", text: "Мороз и солнце; день чудесный! Ещё ты дремлешь, друг прелестный — Пора, красавица, проснись: Открой сомкнуты негой взоры..." },
+  { title: "Зимний вечер", author: "А.С. Пушкин", grade: "6 класс", text: "Буря мглою небо кроет, вихри снежные крутя; то, как зверь, она завоет, то заплачет, как дитя..." },
+  { title: "Парус", author: "М.Ю. Лермонтов", grade: "5 класс", text: "Белеет парус одинокий в тумане моря голубом!.. Что ищет он в стране далёкой? Что кинул он в краю родном?.." },
+  { title: "Не жаль мне тех", author: "С.А. Есенин", grade: "9 класс", text: "Не жаль мне тех, кто уже не со мною, — я сочувствую всем, кто живёт. Вот поэтому, видно, душою покоя я не нахожу, а ищу..." },
+  { title: "Февраль. Достать чернил и плакать!", author: "Б.Л. Пастернак", grade: "10 класс", text: "Февраль. Достать чернил и плакать! Писать о феврале навзрыд, пока грохочущая слякоть весною жгучей не горит." },
+  { title: "Жди меня", author: "К.М. Симонов", grade: "7 класс", text: "Жди меня, и я вернусь. Только очень жди, жди, когда наводят грусть жёлтые дожди, когда снега метут, когда жаром зной..." },
+  { title: "Двенадцать", author: "А.А. Блок", grade: "11 класс", text: "Чёрный вечер. Белый снег. Ветер, ветер! На ногах не стоит человек. Ветер, ветер — на всём божьем свете!.." },
+  
+  // Проза XX века
+  { title: "Человек в футляре", author: "А.П. Чехов", grade: "10 класс", text: "— Как же-с. Так вот-с, жил-был на свете учитель греческого языка, мой товарищ, Беликов. Он умер недавно, около двух месяцев назад..." },
+  { title: "Судьба человека", author: "М.А. Шолохов", grade: "9 класс", text: "В одну из первых послевоенных весен, в апреле сорок шестого года, я возвращался с Урала на родину..." },
+  { title: "Недоросль", author: "Д.И. Фонвизин", grade: "8 класс", text: "Вот злонравия достойные плоды! Митрофанушка! Не хочу учиться, хочу жениться. Вот злонравия достойные плоды!" },
+  { title: "Дикий помещик", author: "М.Е. Салтыков-Щедрин", grade: "8 класс", text: "В отдалённейших странах, где-то почти на краю света, живёт-поживает дикий помещик. Это — самый последний, так сказать, аккорд, в котором отзывается..." },
+  { title: "Василий Тёркин", author: "А.Т. Твардовский", grade: "7 класс", text: "Переправа, переправа! Берег левый, берег правый, снег шершавый, кромка льда... Кому память, кому слава, кому тёмная вода — ни приметы, ни следа." },
+  { title: "Молодая гвардия", author: "А.А. Фадеев", grade: "9 класс", text: "Над городом Краснодоном, над степью, над Донцом стоял невиданный в истории войны бой. Гитлеровцы рвались к Кавказу..." },
+];
+
+// ====== ЭЛЕМЕНТЫ ======
+const textInput = document.getElementById('textInput');
+const btnListen = document.getElementById('btnListen');
+const btnSpeak = document.getElementById('btnSpeak');
+const btnStop = document.getElementById('btnStop');
+const btnClear = document.getElementById('btnClear');
+const voiceSelect = document.getElementById('voiceSelect');
+const rate = document.getElementById('rate');
+const pitch = document.getElementById('pitch');
+const rateVal = document.getElementById('rateVal');
+const pitchVal = document.getElementById('pitchVal');
+const status = document.getElementById('status');
+const library = document.getElementById('library');
+const search = document.getElementById('search');
+const tabs = document.getElementById('tabs');
+
+let recognition = null;
+let isListening = false;
+let voices = [];
+let currentFilter = 'Все';
+
+// ====== ГОЛОСА ======
+function loadVoices() {
+  voices = speechSynthesis.getVoices();
+  voiceSelect.innerHTML = '';
+  // Сначала русские, потом остальные
+  const sorted = [...voices].sort((a, b) => {
+    const ar = a.lang.startsWith('ru');
+    const br = b.lang.startsWith('ru');
+    if (ar && !br) return -1;
+    if (!ar && br) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  sorted.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = voices.indexOf(v);
+    opt.textContent = `${v.name} (${v.lang})${v.default ? ' ★' : ''}`;
+    voiceSelect.appendChild(opt);
+  });
+  if (voices.length === 0) {
+    voiceSelect.innerHTML = '<option>Голоса не найдены</option>';
+  }
+}
+speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+// ====== РАСПОЗНАВАНИЕ РЕЧИ ======
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ru-RU';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  
+  recognition.onresult = (e) => {
+    let final = '', interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    if (final) textInput.value += final;
+    status.textContent = '🎙 ' + (interim || 'Слушаю...');
+  };
+  recognition.onerror = (e) => {
+    status.textContent = '❌ Ошибка: ' + e.error;
+    stopListening();
+  };
+  recognition.onend = () => {
+    if (isListening) recognition.start(); // авто-перезапуск
+    else status.textContent = 'Готово к работе';
+  };
+} else {
+  btnListen.disabled = true;
+  btnListen.textContent = '🎤 Не поддерживается';
+}
+
+function startListening() {
+  if (!recognition) return;
+  isListening = true;
+  recognition.start();
+  btnListen.classList.add('active');
+  btnListen.textContent = '🔴 Идёт запись...';
+  status.textContent = '🎙 Говорите...';
+  status.classList.add('listening');
+}
+
+function stopListening() {
+  isListening = false;
+  if (recognition) recognition.stop();
+  btnListen.classList.remove('active');
+  btnListen.textContent = '🎤 Распознать речь';
+  status.classList.remove('listening');
+}
+
+btnListen.onclick = () => isListening ? stopListening() : startListening();
+
+// ====== ОЗВУЧКА ======
+btnSpeak.onclick = () => {
+  const text = textInput.value.trim();
+  if (!text) { status.textContent = '⚠ Введите текст для озвучки'; return; }
+  if (speechSynthesis.speaking) speechSynthesis.cancel();
+  
+  const utter = new SpeechSynthesisUtterance(text);
+  const selectedVoice = voices[voiceSelect.value];
+  if (selectedVoice) utter.voice = selectedVoice;
+  utter.rate = parseFloat(rate.value);
+  utter.pitch = parseFloat(pitch.value);
+  utter.lang = selectedVoice ? selectedVoice.lang : 'ru-RU';
+  
+  utter.onstart = () => status.textContent = '🔊 Читаю...';
+  utter.onend = () => status.textContent = '✅ Готово';
+  utter.onerror = (e) => status.textContent = '❌ Ошибка озвучки';
+  
+  speechSynthesis.speak(utter);
+};
+
+btnStop.onclick = () => {
+  speechSynthesis.cancel();
+  stopListening();
+  status.textContent = '⏹ Остановлено';
+};
+
+btnClear.onclick = () => {
+  textInput.value = '';
+  status.textContent = '🗑 Очищено';
+};
+
+// ====== СЛАЙДЕРЫ ======
+rate.oninput = () => rateVal.textContent = parseFloat(rate.value).toFixed(1);
+pitch.oninput = () => pitchVal.textContent = parseFloat(pitch.value).toFixed(1);
+
+// ====== БИБЛИОТЕКА ======
+const grades = ['Все', ...new Set(books.map(b => b.grade))];
+grades.forEach(g => {
+  const t = document.createElement('div');
+  t.className = 'tab' + (g === 'Все' ? ' active' : '');
+  t.textContent = g;
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    currentFilter = g;
+    renderBooks();
+  };
+  tabs.appendChild(t);
+});
+
+function renderBooks() {
+  const q = search.value.toLowerCase().trim();
+  library.innerHTML = '';
+  const filtered = books.filter(b => {
+    const matchFilter = currentFilter === 'Все' || b.grade === currentFilter;
+    const matchSearch = !q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q);
+    return matchFilter && matchSearch;
+  });
+  
+  if (filtered.length === 0) {
+    library.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;opacity:0.7;">📭 Ничего не найдено</div>';
+    return;
+  }
+  
+  filtered.forEach(b => {
+    const card = document.createElement('div');
+    card.className = 'book';
+    card.innerHTML = `
+      <span class="grade">${b.grade}</span>
+      <h3>${b.title}</h3>
+      <div class="author">✍ ${b.author}</div>
+      <div class="preview">${b.text.substring(0, 120)}...</div>
+    `;
+    card.onclick = () => {
+      textInput.value = b.text;
+      textInput.focus();
+      status.textContent = `✅ Вставлено: «${b.title}» (${b.author})`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    library.appendChild(card);
+  });
+}
+
+search.oninput = renderBooks;
+renderBooks();
+</script>
+</body>
+</html>
